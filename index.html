@@ -139,6 +139,16 @@
     .copy:hover { background: #383838; }
     .copy.copied { color: var(--ok); border-color: var(--ok); }
 
+    /* Re-roll button */
+    .reroll {
+        width: 100%; margin-top: 14px;
+        background: transparent; border: 1px solid var(--accent); color: var(--accent);
+        border-radius: 12px; padding: 13px; font-size: 0.95rem; font-weight: 700;
+        letter-spacing: 0.5px; cursor: pointer; transition: 0.15s;
+    }
+    .reroll:hover:not(:disabled) { background: rgba(142, 201, 232, 0.12); }
+    .reroll:disabled { opacity: 0.45; cursor: not-allowed; border-color: var(--border-2); color: var(--muted); }
+
     .status { text-align: center; color: #ff8a8a; min-height: 18px; margin: 8px 0 0; font-size: 0.85rem; }
 
     @media (max-width: 560px) {
@@ -179,6 +189,7 @@
             </label>
         </div>
         <p class="status" id="status"></p>
+        <button class="reroll" id="rerollBtn" disabled>↻ Generate New Spawn</button>
     </div>
 
     <div class="panel">
@@ -406,6 +417,7 @@ function render() {
 
 function setBusy(busy, msg) {
     document.getElementById('status').textContent = msg || '';
+    document.getElementById('rerollBtn').disabled = busy;   // re-enabled after the first generation
     if (busy) {
         document.getElementById('previewBody').innerHTML = '<div class="placeholder">Generating&hellip;</div>';
     }
@@ -483,6 +495,9 @@ document.getElementById('copyBtn').addEventListener('click', () => {
         setTimeout(() => { btn.textContent = 'Copy to the Clipboard'; btn.classList.remove('copied'); }, 1500);
     });
 });
+
+// Re-roll: generate a fresh spawn with the same settings the user already entered.
+document.getElementById('rerollBtn').addEventListener('click', () => generate());
 
 buildTypeOptions();
 </script>
