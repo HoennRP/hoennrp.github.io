@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wild Pokémon Generator</title>
+<style>
+    :root {
+        --bg: #1b1b1b;
+        --panel: #262626;
+        --panel-2: #2f2f2f;
+        --inset: #1f1f1f;
+        --border: #3a3a3a;
+        --border-2: #474747;
+        --text: #d9d9d9;
+        --muted: #8a8a8a;
+        --accent: #8ec9e8;     /* light blue title */
+        --trainer: #e0a44a;     /* orange tag line  */
+        --ok: #6bbf73;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        color: var(--text);
+        min-height: 100vh;
+        padding: 26px 16px 60px;
+        background-color: var(--bg);
+        /* faint starfield */
+        background-image:
+            radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+            radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+        background-size: 90px 90px, 140px 140px;
+        background-position: 0 0, 45px 70px;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; }
+
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px 22px;
+        margin-bottom: 16px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+    }
+
+    /* Header */
+    .header { padding: 30px; text-align: center; position: relative; overflow: hidden; }
+    .header h1 {
+        margin: 0;
+        font-size: 3rem;
+        font-weight: 800;
+        color: var(--accent);
+        letter-spacing: 1px;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+
+    .label {
+        font-size: 0.78rem; color: var(--muted);
+        text-transform: uppercase; letter-spacing: 2px; font-weight: 600;
+    }
+
+    /* Controls */
+    .ctrl-row { display: flex; align-items: center; gap: 14px; }
+    .ctrl-row + .ctrl-row { margin-top: 16px; }
+    .count-row { justify-content: flex-end; }
+    .grow { flex: 1; }
+    input[type="text"], input[type="number"] {
+        background: var(--inset);
+        border: 1px solid var(--border-2);
+        color: var(--text);
+        border-radius: 9px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
+        outline: none;
+    }
+    input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
+    input[type="text"] { width: 100%; }
+    input[type="number"] { width: 74px; text-align: center; }
+
+    /* Toggle */
+    .toggle-row { justify-content: space-between; }
+    .toggle-meta strong { display: block; color: var(--trainer); font-size: 0.92rem; letter-spacing: 0.5px; }
+    .toggle-meta span { font-size: 0.78rem; color: var(--muted); }
+    .switch { position: relative; width: 50px; height: 27px; flex: 0 0 auto; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; inset: 0; cursor: pointer; background: #444; border-radius: 999px; transition: 0.2s; }
+    .slider::before { content: ""; position: absolute; width: 21px; height: 21px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.2s; }
+    .switch input:checked + .slider { background: var(--trainer); }
+    .switch input:checked + .slider::before { transform: translateX(23px); }
+
+    /* Preview window */
+    .panel-title { text-align: center; color: var(--muted); letter-spacing: 3px; font-size: 0.78rem; font-weight: 700; margin-bottom: 16px; }
+    .window {
+        background: var(--panel-2);
+        border: 1px solid var(--border-2);
+        border-radius: 8px;
+        overflow: hidden;
+        max-width: 680px; margin: 0 auto;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+    .titlebar {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 8px 12px; background: #272727; border-bottom: 1px solid var(--border-2);
+        font-size: 0.74rem; letter-spacing: 1.5px; color: var(--muted);
+    }
+    .titlebar .tb-left { display: flex; align-items: center; gap: 8px; }
+    .ball { width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(#d24b4b 0 49%, #eee 49% 51%, #cfcfcf 51% 100%); border: 1px solid #1d1d1d; }
+    .titlebar .tb-right { letter-spacing: 4px; }
+    .window-body { padding: 26px 22px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+    .placeholder { color: var(--muted); font-size: 0.9rem; }
+
+    /* Rendered forum post (BBCode -> HTML). Default theme; replace with your forum CSS for an exact match. */
+    .forum-render { max-width: 360px; margin: 0 auto; }
+    .forum-render .wildtemp {
+        background: #efeae2; border: 1px solid #cfc7bb; border-radius: 10px;
+        padding: 12px; box-shadow: inset 0 0 0 3px #fff;
+        font-family: Verdana, Geneva, sans-serif; color: #4a4036;
+    }
+    .forum-render .wildbgsaf {
+        height: 46px; border-radius: 6px; margin-bottom: 6px;
+        background: linear-gradient(135deg, #bcd3ef, #d6e6dc);
+    }
+    .forum-render .wildtitle {
+        text-align: center; font-weight: bold; font-size: 13px; letter-spacing: 1px;
+        text-transform: uppercase; margin: 8px 0 6px; color: #3a3026;
+    }
+    .forum-render .wildshiny { height: 0; overflow: hidden; }
+    .forum-render .wildpkmnbox, .forum-render .wildpkmn { text-align: center; }
+    .forum-render .wildpkmn img { max-width: 120px; image-rendering: pixelated; }
+    .forum-render .wildtab table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; }
+    .forum-render .wildtab td { padding: 0; width: 50%; }
+    .forum-render .wildtabox, .forum-render .wildtabox2 {
+        border: 1px solid #d8d0c4; padding: 6px 4px; text-align: center;
+        font-size: 11px; letter-spacing: 0.5px;
+    }
+    .forum-render .wildtabox { background: #fbf9f5; }
+    .forum-render .wildtabox2 { background: #f1ece3; }
+    .forum-render .wildtag { text-align: center; font-size: 11px; color: #8a7f70; margin-top: 8px; }
+    .forum-render .wildnote { text-align: center; font-style: italic; font-size: 11px; color: #6f655a; margin-top: 4px; }
+    .forum-render i { font-style: italic; }
+
+    /* Payload */
+    .payload {
+        background: var(--inset); border: 1px solid var(--border); border-radius: 10px;
+        margin: 0; padding: 16px 18px; max-height: 280px; overflow: auto;
+        font-family: "Consolas", "Courier New", monospace; font-size: 0.78rem; line-height: 1.5;
+        color: #c7c7c7; white-space: pre-wrap; word-break: break-word;
+    }
+    .payload:empty::before { content: "Your BBCode will appear here."; color: var(--muted); }
+
+    /* Copy button */
+    .copy {
+        width: 100%; margin-top: 4px;
+        background: var(--panel-2); border: 1px solid var(--border-2); color: #cfcfcf;
+        border-radius: 14px; padding: 18px; font-size: 1.05rem; font-weight: 800;
+        letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: 0.15s;
+    }
+    .copy:hover { background: #383838; }
+    .copy.copied { color: var(--ok); border-color: var(--ok); }
+
+    .status { text-align: center; color: #ff8a8a; min-height: 18px; margin: 8px 0 0; font-size: 0.85rem; }
+
+    @media (max-width: 560px) {
+        .header h1 { font-size: 2.1rem; }
+        .mon { width: 44%; }
+    }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+    <div class="panel header">
+        <h1>wild encounter</h1>
+    </div>
+
+    <div class="panel">
+        <div class="ctrl-row">
+            <span class="label" style="flex:0 0 auto;">Type</span>
+            <input type="text" id="typeInput" class="grow" list="typeList"
+                   placeholder="Type or choose a type… (e.g. water)" autocomplete="off" />
+            <datalist id="typeList"></datalist>
+        </div>
+        <div class="ctrl-row count-row">
+            <span class="label">How many spawns?</span>
+            <input type="number" id="count" min="1" max="12" value="1" />
+        </div>
+        <div class="ctrl-row">
+            <span class="label" style="flex:0 0 auto;">Tags</span>
+            <input type="text" id="tags" class="grow" placeholder="@user1 @user2 ..." />
+        </div>
+        <div class="ctrl-row toggle-row">
+            <div class="toggle-meta">
+                <strong>Monthly Bonus</strong>
+                <span>Adds a 5th move (italic), drawn from the Egg Move pool when available.</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="monthlyBonus" />
+                <span class="slider"></span>
+            </label>
+        </div>
+        <p class="status" id="status"></p>
+    </div>
+
+    <div class="panel">
+        <div class="panel-title">Preview</div>
+        <div class="window">
+            <div class="titlebar">
+                <span class="tb-left"><span class="ball"></span> WILD ENCOUNTER</span>
+                <span class="tb-right">&ndash; &#9633; &times;</span>
+            </div>
+            <div class="window-body" id="previewBody"></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <pre class="payload" id="payload"></pre>
+    </div>
+
+    <button class="copy" id="copyBtn">Copy to the Clipboard</button>
+
+</div>
+
+<script>
+// ----- Type catalogue (color + glyph) -----
+const TYPES = [
+    { name: 'normal',   color: '#a8a77a', icon: '\u{1F518}' },
+    { name: 'fire',     color: '#ee8130', icon: '\u{1F525}' },
+    { name: 'water',    color: '#6390f0', icon: '\u{1F4A7}' },
+    { name: 'electric', color: '#f7d02c', icon: '⚡' },
+    { name: 'grass',    color: '#7ac74c', icon: '\u{1F343}' },
+    { name: 'ice',      color: '#96d9d6', icon: '❄' },
+    { name: 'fighting', color: '#c22e28', icon: '\u{1F94A}' },
+    { name: 'poison',   color: '#a33ea1', icon: '☠' },
+    { name: 'ground',   color: '#e2bf65', icon: '\u{1F3D4}' },
+    { name: 'flying',   color: '#a98ff3', icon: '\u{1FAB6}' },
+    { name: 'psychic',  color: '#f95587', icon: '\u{1F52E}' },
+    { name: 'bug',      color: '#a6b91a', icon: '\u{1F41B}' },
+    { name: 'rock',     color: '#b6a136', icon: '\u{1FAA8}' },
+    { name: 'ghost',    color: '#735797', icon: '\u{1F47B}' },
+    { name: 'dragon',   color: '#6f35fc', icon: '\u{1F409}' },
+    { name: 'dark',     color: '#705746', icon: '\u{1F319}' },
+    { name: 'steel',    color: '#b7b7ce', icon: '⚙' },
+    { name: 'fairy',    color: '#d685ad', icon: '\u{1F380}' },
+];
+
+const state = { type: null, count: 1, tags: '', monthlyBonus: false, spawns: [], bbcode: '' };
+
+// ----- PokeAPI access (browser-direct, with localStorage caching) -----
+async function pokeFetch(endpoint) {
+    const key = 'poke:' + endpoint;
+    try { const hit = localStorage.getItem(key); if (hit) return JSON.parse(hit); } catch (e) {}
+    const res = await fetch('https://pokeapi.co/api/v2/' + endpoint);
+    if (!res.ok) throw new Error('Request failed: ' + endpoint);
+    const data = await res.json();
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { /* quota — skip cache */ }
+    return data;
+}
+
+// ----- Generation logic (ported from the old server) -----
+function getRandomInt(max) { return Math.floor(Math.random() * max); }
+function fmt(named) { return named.name.replace(/-/g, ' ').toUpperCase(); }
+
+async function pickValidPokemon(typeResponse) {
+    while (true) {
+        const idx = getRandomInt(typeResponse.pokemon.length);
+        const orgName = typeResponse.pokemon[idx].pokemon.name;
+        try {
+            const speciesData = await pokeFetch('pokemon-species/' + orgName);
+            const valid = !speciesData.is_legendary && !speciesData.is_mythical && speciesData.hatch_counter < 49;
+            if (valid) return { orgName, speciesData };
+        } catch (err) { }
+    }
+}
+
+function resolveGender(speciesData) {
+    switch (speciesData.gender_rate) {
+        case -1: return 'GENDERLESS';
+        case 0:  return 'MALE';
+        case 8:  return 'FEMALE';
+        default: return getRandomInt(100) > 50 ? 'MALE' : 'FEMALE';
+    }
+}
+
+function movePool(moves, methodName) {
+    return moves
+        .filter(mi => mi.version_group_details.some(v => v.move_learn_method.name === methodName))
+        .map(mi => mi.move);
+}
+
+function pickRandomMoves(pool, count) {
+    const copy = pool.slice();
+    const out = [];
+    while (out.length < count && copy.length > 0) {
+        out.push(copy.splice(getRandomInt(copy.length), 1)[0]);
+    }
+    return out;
+}
+
+async function generateSpawn(typeResponse, monthlyBonus) {
+    const { orgName, speciesData } = await pickValidPokemon(typeResponse);
+    const pokemonResponse = await pokeFetch('pokemon/' + orgName);
+
+    const name = pokemonResponse.name.toUpperCase();
+    const sprite = pokemonResponse.sprites.front_default;
+    const gender = resolveGender(speciesData);
+    const ability = fmt(pokemonResponse.abilities[getRandomInt(pokemonResponse.abilities.length)].ability);
+
+    const levelUpPool = movePool(pokemonResponse.moves, 'level-up');
+    const chosen = pickRandomMoves(levelUpPool, 4);
+
+    // MONTHLY BONUS: 5th move, prefer the Egg Move pool, fall back to remaining level-up moves
+    if (monthlyBonus) {
+        const chosenNames = new Set(chosen.map(mv => mv.name));
+        const eggPool = movePool(pokemonResponse.moves, 'egg').filter(mv => !chosenNames.has(mv.name));
+        let fifth = null;
+        if (eggPool.length > 0) {
+            fifth = pickRandomMoves(eggPool, 1)[0];
+        } else {
+            const remaining = levelUpPool.filter(mv => !chosenNames.has(mv.name));
+            if (remaining.length > 0) fifth = pickRandomMoves(remaining, 1)[0];
+        }
+        if (fifth) chosen.push(fifth);
+    }
+
+    return { name, sprite, gender, ability, moveStrings: chosen.map(fmt) };
+}
+
+// ----- BBCode template -----
+function buildTemplate(data, tags) {
+    const m = i => (data.moveStrings[i] ? data.moveStrings[i] : '---');
+    const fifth = data.moveStrings[4] ? `[i]${data.moveStrings[4]}[/i]` : '---';
+    return `[nospaces]
+[div align="center"]
+[div][attr="class","wildtemp"]
+[div][attr="class","wildbgsaf"][/div]
+[div][attr="class","wildtitle"]A WILD ${data.name} APPEARED![/div]
+[div][attr="class","wildshiny"][img src="https://i.imgur.com/Ht4F0n8.png" style="max-width:100%;opacity:0;"][/div]
+[div][attr="class","wildpkmnbox"]
+[div][attr="class","wildpkmn"]
+[img style="max-width:100%;" src="${data.sprite}" alt=" "]
+[/div][/div]
+[div][attr="class","wildtab"][table][tbody]
+[tr]
+    [td][div][attr="class","wildtabox"] [font color="75a8e6"]${data.gender}[/font] [/div][/td]
+    [td][div][attr="class","wildtabox2"] [font color="75a8e6"]${data.ability}[/font] [/div][/td]
+[/tr]
+[tr]
+    [td][div][attr="class","wildtabox"]${m(0)}[/div][/td]
+    [td][div][attr="class","wildtabox2"]${m(1)}[/div][/td]
+[/tr]
+[tr]
+    [td][div][attr="class","wildtabox"]${m(2)}[/div][/td]
+    [td][div][attr="class","wildtabox2"]${m(3)}[/div][/td]
+[/tr]
+[tr]
+    [td][div][attr="class","wildtabox"]${fifth}[/div][/td]
+    [td][div][attr="class","wildtabox2"] --- [/div][/td]
+[/tr]
+[/tbody][/table]
+[div][attr="class","wildtag"]${tags}[/div]
+[div][attr="class","wildnote"] WHAT WILL YOU DO? [/div]
+[/div][/div][/div][break][break]`;
+}
+
+// ----- Rendering -----
+// Convert the generated BBCode into the HTML a Jcink/ProBoards-style forum would post.
+// [div][attr="class","x"] -> <div class="x">, [font color="hhh"] -> colored span, etc.
+function bbcodeToHtml(bb) {
+    // Neutralize any stray markup (e.g. from the tags field) before inserting our own tags.
+    let html = bb.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    html = html
+        .replace(/\[nospaces\]/g, '')
+        .replace(/\[break\]/g, '')
+        .replace(/\[div align="center"\]/g, '<div style="text-align:center">')
+        .replace(/\[div\]\[attr="class","([^"]+)"\]/g, '<div class="$1">')
+        .replace(/\[img([^\]]*)\]/g, (m, attrs) => {
+            const src = (attrs.match(/src="([^"]*)"/) || [])[1] || '';
+            const style = (attrs.match(/style="([^"]*)"/) || [])[1] || '';
+            return `<img src="${src}" style="${style}" alt="">`;
+        })
+        .replace(/\[font color="([^"]*)"\]/g, '<span style="color:#$1">')
+        .replace(/\[\/font\]/g, '</span>')
+        .replace(/\[i\]/g, '<i>').replace(/\[\/i\]/g, '</i>')
+        .replace(/\[table\]/g, '<table>').replace(/\[\/table\]/g, '</table>')
+        .replace(/\[tbody\]/g, '<tbody>').replace(/\[\/tbody\]/g, '</tbody>')
+        .replace(/\[tr\]/g, '<tr>').replace(/\[\/tr\]/g, '</tr>')
+        .replace(/\[td\]/g, '<td>').replace(/\[\/td\]/g, '</td>')
+        .replace(/\[\/div\]/g, '</div>')
+        .replace(/\[div\]/g, '<div>');
+    return html;
+}
+
+function render() {
+    const tags = state.tags.trim() || '@tag';
+    const previewBody = document.getElementById('previewBody');
+
+    if (!state.spawns.length) {
+        previewBody.innerHTML = '';
+        document.getElementById('payload').textContent = '';
+        state.bbcode = '';
+        return;
+    }
+
+    const cards = state.spawns.map(s => buildTemplate(s, tags));
+    previewBody.innerHTML = cards
+        .map(bb => '<div class="forum-render">' + bbcodeToHtml(bb) + '</div>')
+        .join('');
+
+    state.bbcode = cards.join('\n\n');
+    document.getElementById('payload').textContent = state.bbcode;
+}
+
+function setBusy(busy, msg) {
+    document.getElementById('status').textContent = msg || '';
+    if (busy) {
+        document.getElementById('previewBody').innerHTML = '<div class="placeholder">Generating&hellip;</div>';
+    }
+}
+
+async function generate() {
+    if (!state.type) return;
+    setBusy(true, '');
+    try {
+        const typeResponse = await pokeFetch('type/' + state.type);
+        const spawns = [];
+        for (let i = 0; i < state.count; i++) {
+            spawns.push(await generateSpawn(typeResponse, state.monthlyBonus));
+        }
+        state.spawns = spawns;
+        render();
+        setBusy(false, '');
+    } catch (err) {
+        state.spawns = [];
+        render();
+        setBusy(false, 'Could not generate. Check your connection and try again.');
+    }
+}
+
+// ----- Wiring -----
+const TYPE_NAMES = new Set(TYPES.map(t => t.name));
+
+function buildTypeOptions() {
+    const list = document.getElementById('typeList');
+    TYPES.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.name;
+        list.appendChild(opt);
+    });
+}
+
+document.getElementById('typeInput').addEventListener('change', e => {
+    const val = e.target.value.trim().toLowerCase();
+    e.target.value = val;
+    if (TYPE_NAMES.has(val)) {
+        document.getElementById('status').textContent = '';
+        state.type = val;
+        generate();
+    } else if (val) {
+        state.type = null;
+        document.getElementById('status').textContent = 'Unknown type — choose one from the list.';
+    }
+});
+
+document.getElementById('count').addEventListener('change', e => {
+    let v = parseInt(e.target.value, 10);
+    if (isNaN(v) || v < 1) v = 1;
+    if (v > 12) v = 12;
+    e.target.value = v;
+    state.count = v;
+    if (state.type) generate();
+});
+
+document.getElementById('monthlyBonus').addEventListener('change', e => {
+    state.monthlyBonus = e.target.checked;
+    if (state.type) generate();
+});
+
+document.getElementById('tags').addEventListener('input', e => {
+    state.tags = e.target.value;
+    if (state.spawns.length) render(); // tags don't need a refetch
+});
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+    if (!state.bbcode) return;
+    const btn = document.getElementById('copyBtn');
+    navigator.clipboard.writeText(state.bbcode).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy to the Clipboard'; btn.classList.remove('copied'); }, 1500);
+    });
+});
+
+buildTypeOptions();
+</script>
+</body>
+</html>
