@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Wild Pokémon Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Abel&family=Poppins:wght@800&family=Rubik&display=swap" rel="stylesheet">
 <style>
     :root {
         --bg: #1b1b1b;
@@ -110,34 +113,27 @@
     .window-body { padding: 26px 22px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
     .placeholder { color: var(--muted); font-size: 0.9rem; }
 
-    /* Rendered forum post (BBCode -> HTML). Default theme; replace with your forum CSS for an exact match. */
-    .forum-render { max-width: 360px; margin: 0 auto; }
-    .forum-render .wildtemp {
-        background: #efeae2; border: 1px solid #cfc7bb; border-radius: 10px;
-        padding: 12px; box-shadow: inset 0 0 0 3px #fff;
-        font-family: Verdana, Geneva, sans-serif; color: #4a4036;
-    }
-    .forum-render .wildbgsaf {
-        height: 46px; border-radius: 6px; margin-bottom: 6px;
-        background: linear-gradient(135deg, #bcd3ef, #d6e6dc);
-    }
-    .forum-render .wildtitle {
-        text-align: center; font-weight: bold; font-size: 13px; letter-spacing: 1px;
-        text-transform: uppercase; margin: 8px 0 6px; color: #3a3026;
-    }
-    .forum-render .wildshiny { height: 0; overflow: hidden; }
-    .forum-render .wildpkmnbox, .forum-render .wildpkmn { text-align: center; }
-    .forum-render .wildpkmn img { max-width: 120px; image-rendering: pixelated; }
-    .forum-render .wildtab table { width: 100%; border-collapse: collapse; margin: 10px 0 6px; }
-    .forum-render .wildtab td { padding: 0; width: 50%; }
-    .forum-render .wildtabox, .forum-render .wildtabox2 {
-        border: 1px solid #d8d0c4; padding: 6px 4px; text-align: center;
-        font-size: 11px; letter-spacing: 0.5px;
-    }
-    .forum-render .wildtabox { background: #fbf9f5; }
-    .forum-render .wildtabox2 { background: #f1ece3; }
-    .forum-render .wildtag { text-align: center; font-size: 11px; color: #8a7f70; margin-top: 8px; }
-    .forum-render .wildnote { text-align: center; font-style: italic; font-size: 11px; color: #6f655a; margin-top: 4px; }
+    /* Rendered forum post (BBCode -> HTML) — ported verbatim from the HOENN template.
+       ProBoards @variables resolved: bg #2b2b2b, border #232323, font #aaa. */
+    .forum-render { width: 500px; max-width: 100%; margin: 0 auto; color: #aaa; }
+    .forum-render .wildbgsaf {background-image:url('https://i.imgur.com/1gkYebS.png');width:500px;height:350px;opacity:0.05;position:relative;z-index:87;filter: grayscale(100%);}
+    .forum-render .wildtemp {background:#2b2b2b;width:500px;height:350px;border:1px solid #232323;outline:2px solid #333333;border-radius:10px;margin:10px 0px;}
+    .forum-render .wildtitle {line-height:20px;padding:10px;background:#2b2b2b;border-top:1px solid #232323;border-bottom:1px solid #232323;margin-top:-330px;color:#aaa;font: 800 20px Poppins;text-transform:uppercase;text-align:center;position:relative;z-index:89;background-image: url(https://image.ibb.co/dMFuMc/flower.png);background-repeat: no-repeat;background-position: bottom right;}
+    .forum-render .wildshiny {height:16px;width:16px;position:relative;z-index:91;margin-top:-36px;float:right;margin-right:10px;}
+    .forum-render .wildshiny img {content: url("https://i.imgur.com/5Ohh9Ez.png");}
+    .forum-render .wildpkmnbox {height:180px;width:180px;padding:0px;position:relative;z-index:88;margin-left:209px;margin-top:5px;}
+    .forum-render .wildpkmn {height:180px;width:180px;display:table-cell;vertical-align:middle;}
+    .forum-render .wildpkmn img {margin-top:15px; margin-left:1px; text-align:center; display:block; opacity:0.8;filter: grayscale(0.20);filter: drop-shadow(5px 5px 5px rgba(23,23,23,0.55)); }
+    /* margin-left calibrated for the standalone preview: the template's -166px assumes the HOENN theme's base flow
+       (which shifts the table's start point ~+180px); without those globals the stat group falls off the card's
+       left edge, so we inset it to +14px so stats sit on the left and the sprite stays on the right. */
+    .forum-render .wildtab {height:149px;width:195px;padding:0px;margin-top:-163px;margin-left:14px;position:relative;z-index:90;}
+    .forum-render .wildtabox { margin-bottom:5px; height:27px;width:95px;background:#2b2b2b;border:1px solid #232323;margin-left:-13px;margin-top:-5px;line-height:27px;color:#aaa;font-family:Abel;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;}
+    .forum-render .wildtabox2 {height:27px;width:95px;background:#2b2b2b;border:1px solid #232323;margin-left:-2px;margin-top:-10px;line-height:27px;color:#aaa;font-family:Abel;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;}
+    .forum-render .wildtag {margin-left:-12px;height:27px;width:176px;background:#2b2b2b;border:1px solid #232323;margin-top:-2px;line-height:27px;color:#aaa;font-family:Abel;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0px 10px;border-radius:5px;}
+    .forum-render .wildtag a {font-family:Rubik;font-size:8px;letter-spacing:-0.5px;text-transform:lowercase;}
+    .forum-render .wildnote {margin-bottom:20px; height:20px; margin-top:27px; text-align:left; width:329px;border-image-slice: 22 22 22 22;border-image-width: 22px 22px 22px 22px;border-image-outset: 22px 22px 22px 22px;border-image-source: url("https://i.imgur.com/XNXdQk2.png");border-style: solid;background: #aaa;font: 12px Calibri;letter-spacing:.5px;color: #232323;padding:5px; text-transform:lowercase;}
+    .forum-render .wildnote a {font-family:Rubik;font-size:8px;letter-spacing:-0.5px;text-transform:lowercase;}
     .forum-render i { font-style: italic; }
 
     /* Payload */
@@ -163,7 +159,6 @@
 
     @media (max-width: 560px) {
         .header h1 { font-size: 2.1rem; }
-        .mon { width: 44%; }
     }
 </style>
 </head>
@@ -187,7 +182,7 @@
         </div>
         <div class="ctrl-row">
             <span class="label" style="flex:0 0 auto;">Tags</span>
-            <input type="text" id="tags" class="grow" placeholder="@user1 @user2 ..." />
+            <input type="text" id="tags" class="grow" placeholder="e.g. rima — the @ is added for you" />
         </div>
         <div class="ctrl-row toggle-row">
             <div class="toggle-meta">
@@ -330,8 +325,7 @@ async function generateSpawn(typeResponse, monthlyBonus) {
 function buildTemplate(data, tags) {
     const m = i => (data.moveStrings[i] ? data.moveStrings[i] : '---');
     const fifth = data.moveStrings[4] ? `[i]${data.moveStrings[4]}[/i]` : '---';
-    return `[nospaces]
-[div align="center"]
+    return `[div align="center"]
 [div][attr="class","wildtemp"]
 [div][attr="class","wildbgsaf"][/div]
 [div][attr="class","wildtitle"]A WILD ${data.name} APPEARED![/div]
@@ -392,7 +386,9 @@ function bbcodeToHtml(bb) {
 }
 
 function render() {
-    const tags = state.tags.trim() || '@tag';
+    let tags = state.tags.trim();
+    if (!tags) tags = '@tag';
+    else if (!tags.startsWith('@')) tags = '@' + tags;   // user need not type the @
     const previewBody = document.getElementById('previewBody');
 
     if (!state.spawns.length) {
@@ -407,7 +403,7 @@ function render() {
         .map(bb => '<div class="forum-render">' + bbcodeToHtml(bb) + '</div>')
         .join('');
 
-    state.bbcode = cards.join('\n\n');
+    state.bbcode = '[nospaces]\n' + cards.join('\n\n');   // one [nospaces] per generation, not per card
     document.getElementById('payload').textContent = state.bbcode;
 }
 
