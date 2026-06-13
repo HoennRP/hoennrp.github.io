@@ -92,29 +92,15 @@
     .switch input:checked + .slider { background: var(--trainer); }
     .switch input:checked + .slider::before { transform: translateX(23px); }
 
-    /* Preview window */
+    /* Preview */
     .panel-title { text-align: center; color: var(--muted); letter-spacing: 3px; font-size: 0.78rem; font-weight: 700; margin-bottom: 16px; }
-    .window {
-        background: var(--panel-2);
-        border: 1px solid var(--border-2);
-        border-radius: 8px;
-        overflow: hidden;
-        max-width: 680px; margin: 0 auto;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-    }
-    .titlebar {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 8px 12px; background: #272727; border-bottom: 1px solid var(--border-2);
-        font-size: 0.74rem; letter-spacing: 1.5px; color: var(--muted);
-    }
-    .titlebar .tb-left { display: flex; align-items: center; gap: 8px; }
-    .ball { width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(#d24b4b 0 49%, #eee 49% 51%, #cfcfcf 51% 100%); border: 1px solid #1d1d1d; }
-    .titlebar .tb-right { letter-spacing: 4px; }
     .window-body { padding: 26px 22px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
     .placeholder { color: var(--muted); font-size: 0.9rem; }
 
-    /* Rendered forum post (BBCode -> HTML) — ported verbatim from the HOENN template.
-       ProBoards @variables resolved: bg #2b2b2b, border #232323, font #aaa. */
+    /* Rendered forum post (BBCode -> HTML) — your HOENN CSS block applied verbatim to the generated BBCode.
+       ProBoards @variables resolved: bg #2b2b2b, border #232323, font #aaa. The only deviation from the block
+       is wildtab's margin-left (see note): the block's -166px assumes your theme's base flow, which isn't
+       present in this standalone page, so without a small inset the stat group renders off the card's left edge. */
     .forum-render { width: 500px; max-width: 100%; margin: 0 auto; color: #aaa; }
     .forum-render .wildbgsaf {background-image:url('https://i.imgur.com/1gkYebS.png');width:500px;height:350px;opacity:0.05;position:relative;z-index:87;filter: grayscale(100%);}
     .forum-render .wildtemp {background:#2b2b2b;width:500px;height:350px;border:1px solid #232323;outline:2px solid #333333;border-radius:10px;margin:10px 0px;}
@@ -124,9 +110,7 @@
     .forum-render .wildpkmnbox {height:180px;width:180px;padding:0px;position:relative;z-index:88;margin-left:209px;margin-top:5px;}
     .forum-render .wildpkmn {height:180px;width:180px;display:table-cell;vertical-align:middle;}
     .forum-render .wildpkmn img {margin-top:15px; margin-left:1px; text-align:center; display:block; opacity:0.8;filter: grayscale(0.20);filter: drop-shadow(5px 5px 5px rgba(23,23,23,0.55)); }
-    /* margin-left calibrated for the standalone preview: the template's -166px assumes the HOENN theme's base flow
-       (which shifts the table's start point ~+180px); without those globals the stat group falls off the card's
-       left edge, so we inset it to +14px so stats sit on the left and the sprite stays on the right. */
+    /* Block value is margin-left:-166px; kept at +14px so the stat group stays on the card standalone (see note above). */
     .forum-render .wildtab {height:149px;width:195px;padding:0px;margin-top:-163px;margin-left:14px;position:relative;z-index:90;}
     .forum-render .wildtabox { margin-bottom:5px; height:27px;width:95px;background:#2b2b2b;border:1px solid #232323;margin-left:-13px;margin-top:-5px;line-height:27px;color:#aaa;font-family:Abel;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;}
     .forum-render .wildtabox2 {height:27px;width:95px;background:#2b2b2b;border:1px solid #232323;margin-left:-2px;margin-top:-10px;line-height:27px;color:#aaa;font-family:Abel;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:5px;}
@@ -182,7 +166,7 @@
         </div>
         <div class="ctrl-row">
             <span class="label" style="flex:0 0 auto;">Tags</span>
-            <input type="text" id="tags" class="grow" placeholder="e.g. rima — the @ is added for you" />
+            <input type="text" id="tags" class="grow" placeholder="Type a name to tag… (e.g. spiral)" />
         </div>
         <div class="ctrl-row toggle-row">
             <div class="toggle-meta">
@@ -199,13 +183,7 @@
 
     <div class="panel">
         <div class="panel-title">Preview</div>
-        <div class="window">
-            <div class="titlebar">
-                <span class="tb-left"><span class="ball"></span> WILD ENCOUNTER</span>
-                <span class="tb-right">&ndash; &#9633; &times;</span>
-            </div>
-            <div class="window-body" id="previewBody"></div>
-        </div>
+        <div class="window-body" id="previewBody"></div>
     </div>
 
     <div class="panel">
@@ -256,6 +234,18 @@ async function pokeFetch(endpoint) {
 function getRandomInt(max) { return Math.floor(Math.random() * max); }
 function fmt(named) { return named.name.replace(/-/g, ' ').toUpperCase(); }
 
+// Depth of `name` within an evolution-chain tree: 1 = base, 2 = first evolution, 3 = second evolution.
+// Returns 0 if not found.
+function evolutionStage(chainNode, name, depth) {
+    depth = depth || 1;
+    if (chainNode.species.name === name) return depth;
+    for (const next of chainNode.evolves_to) {
+        const found = evolutionStage(next, name, depth + 1);
+        if (found) return found;
+    }
+    return 0;
+}
+
 async function pickValidPokemon(typeResponse) {
     while (true) {
         const idx = getRandomInt(typeResponse.pokemon.length);
@@ -263,7 +253,14 @@ async function pickValidPokemon(typeResponse) {
         try {
             const speciesData = await pokeFetch('pokemon-species/' + orgName);
             const valid = !speciesData.is_legendary && !speciesData.is_mythical && speciesData.hatch_counter < 49;
-            if (valid) return { orgName, speciesData };
+            if (valid) {
+                // Exclude third-stage evolutions. Stage 1, stage 2, and non-evolving Pokemon still pass.
+                const chainEndpoint = speciesData.evolution_chain.url.split('/api/v2/')[1];
+                const chainData = await pokeFetch(chainEndpoint);
+                if (evolutionStage(chainData.chain, speciesData.name) < 3) {
+                    return { orgName, speciesData };
+                }
+            }
         } catch (err) { }
     }
 }
