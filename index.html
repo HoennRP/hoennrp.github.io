@@ -220,6 +220,15 @@
             </div>
         </div>
         <div class="ctrl-row">
+            <span class="label" style="flex:0 0 auto;">Type 2</span>
+            <div class="combo grow" id="type2Combo">
+                <input type="text" id="type2Input" autocomplete="off"
+                       placeholder="Optional — adds a 2nd spawn of this type" />
+                <button type="button" class="combo-arrow" id="type2Arrow" aria-label="Show all types">▾</button>
+                <ul class="combo-list" id="type2List"></ul>
+            </div>
+        </div>
+        <div class="ctrl-row">
             <span class="label" style="flex:0 0 auto;">Tags</span>
             <input type="text" id="tags" class="grow" placeholder="Type a name to tag… (e.g. spiral)" />
         </div>
@@ -236,7 +245,7 @@
         <div class="ctrl-row toggle-row">
             <div class="toggle-meta">
                 <strong>Monthly Bonus</strong>
-                <span>When available: adds a 5th move (italic) from the Egg Move pool and uses the Hidden Ability.</span>
+                <span>Auto-applies to any spawn whose typing includes the Monthly Bonus Type (5th egg move, Hidden Ability, 10% shiny). Turn on to force it on every spawn.</span>
             </div>
             <label class="switch">
                 <input type="checkbox" id="monthlyBonus" />
@@ -283,7 +292,7 @@ const TYPES = [
     { name: 'fairy',    color: '#d685ad', icon: '\u{1F380}' },
 ];
 
-const state = { type: null, count: 1, tags: '', monthlyBonus: false, spawns: [], bbcode: '' };
+const state = { type: null, type2: null, count: 1, tags: '', monthlyBonus: false, spawns: [], bbcode: '' };
 
 // ----- PokeAPI access (browser-direct, with localStorage caching) -----
 async function pokeFetch(endpoint) {
@@ -355,11 +364,14 @@ function pickRandomMoves(pool, count) {
     return out;
 }
 
-async function generateSpawn(typeResponse, monthlyBonus) {
+async function generateSpawn(typeResponse, bonusCtx) {
     const { orgName, speciesData } = await pickValidPokemon(typeResponse);
     const pokemonResponse = await pokeFetch('pokemon/' + orgName);
 
     const name = pokemonResponse.name.toUpperCase();
+    // Per-spawn Monthly Bonus: forced on for all, OR the Pokemon's actual typing includes the Monthly Bonus type.
+    const pkTypes = pokemonResponse.types.map(t => t.type.name);
+    const monthlyBonus = bonusCtx.forceAll || (!!bonusCtx.mbType && pkTypes.includes(bonusCtx.mbType));
     // Shiny roll per spawn: 5% normally, 10% with Monthly Bonus. Shiny uses the shiny sprite.
     const isShiny = getRandomInt(100) < (monthlyBonus ? 10 : 5);
     const sprite = (isShiny && pokemonResponse.sprites.front_shiny)
@@ -490,13 +502,20 @@ let generationId = 0;   // guards against overlapping generations — only the l
 
 async function generate() {
     if (!state.type) return;
+    // Two different types -> one spawn of each. Single type -> spawns toggle (1 or 2).
+    const twoTypes = state.type2 && state.type2 !== state.type;
+    const slots = twoTypes ? [state.type, state.type2] : Array(state.count).fill(state.type);
+    // Monthly Bonus context, evaluated per spawn inside generateSpawn.
+    const mbVal = document.getElementById('sharedInput').value.trim().toLowerCase();
+    const bonusCtx = { mbType: TYPE_NAMES.has(mbVal) ? mbVal : null, forceAll: state.monthlyBonus };
+
     const myId = ++generationId;
     setBusy(true, '');
     try {
-        const typeResponse = await pokeFetch('type/' + state.type);
         const spawns = [];
-        for (let i = 0; i < state.count; i++) {
-            spawns.push(await generateSpawn(typeResponse, state.monthlyBonus));
+        for (const slotType of slots) {
+            const typeResponse = await pokeFetch('type/' + slotType);
+            spawns.push(await generateSpawn(typeResponse, bonusCtx));
             if (myId !== generationId) return;   // a newer generation started — abandon this one
         }
         if (myId !== generationId) return;
@@ -557,6 +576,7 @@ function setupTypeCombo(combo, input, list, arrow, opts) {
         const val = input.value.trim().toLowerCase();
         input.value = val;
         if (TYPE_NAMES.has(val)) choose(val);
+        else if (!val && opts.onClear) opts.onClear();
         else if (val && opts.onInvalid) opts.onInvalid(val);
     });
     arrow.addEventListener('mousedown', e => {
@@ -567,15 +587,15 @@ function setupTypeCombo(combo, input, list, arrow, opts) {
     document.addEventListener('mousedown', e => { if (!combo.contains(e.target)) close(); });
 }
 
-// Auto-enable Monthly Bonus when the chosen generation Type matches the shared Monthly Bonus Type (disable otherwise).
-function syncMonthlyBonusToggle() {
-    const mbType = (document.getElementById('sharedInput').value || '').trim().toLowerCase();
-    const match = !!(state.type && mbType && state.type === mbType);
-    document.getElementById('monthlyBonus').checked = match;
-    state.monthlyBonus = match;
+// Two different types force 2 spawns (one each), so the spawns toggle is overridden in that mode.
+function updateSpawnsToggleState() {
+    const twoTypes = !!(state.type2 && state.type2 !== state.type);
+    const toggle = document.getElementById('spawnsToggle');
+    toggle.disabled = twoTypes;
+    toggle.closest('.toggle-row').style.opacity = twoTypes ? '0.5' : '';
 }
 
-// Generation Type
+// Generation Type (primary)
 setupTypeCombo(
     document.getElementById('typeCombo'),
     document.getElementById('typeInput'),
@@ -586,9 +606,10 @@ setupTypeCombo(
             if (name === state.type) return;          // already selected — no re-generate
             document.getElementById('status').textContent = '';
             state.type = name;
-            syncMonthlyBonusToggle();                 // bonus follows the shared Monthly Bonus Type
+            updateSpawnsToggleState();
             generate();
         },
+        onClear: () => { state.type = null; updateSpawnsToggleState(); },
         onInvalid: () => {
             state.type = null;
             document.getElementById('status').textContent = 'Unknown type — choose one from the list.';
@@ -596,13 +617,31 @@ setupTypeCombo(
     }
 );
 
-// Monthly Bonus Type (the shared value)
+// Generation Type (second, optional) — adds a spawn of this type
+setupTypeCombo(
+    document.getElementById('type2Combo'),
+    document.getElementById('type2Input'),
+    document.getElementById('type2List'),
+    document.getElementById('type2Arrow'),
+    {
+        onChoose: name => {
+            if (name === state.type2) return;
+            state.type2 = name;
+            updateSpawnsToggleState();
+            if (state.type) generate();
+        },
+        onClear: () => { state.type2 = null; updateSpawnsToggleState(); if (state.type) generate(); },
+        onInvalid: () => { state.type2 = null; updateSpawnsToggleState(); if (state.type) generate(); }
+    }
+);
+
+// Monthly Bonus Type (the shared value) — just stores the value; it applies on the next generation.
 setupTypeCombo(
     document.getElementById('sharedCombo'),
     document.getElementById('sharedInput'),
     document.getElementById('sharedList'),
     document.getElementById('sharedArrow'),
-    { onChoose: () => syncMonthlyBonusToggle() }
+    { onChoose: () => {} }
 );
 
 document.getElementById('spawnsToggle').addEventListener('change', e => {
@@ -659,7 +698,6 @@ async function loadSharedValue() {
     } catch (e) {
         sharedStatus.textContent = 'Could not load the shared value.';
     }
-    syncMonthlyBonusToggle();   // reflect the loaded Monthly Bonus Type against the current Type
 }
 
 async function saveSharedValue() {
@@ -679,7 +717,6 @@ async function saveSharedValue() {
     } finally {
         sharedSave.disabled = false;
     }
-    syncMonthlyBonusToggle();   // a new Monthly Bonus Type may now match the current Type
 }
 
 sharedSave.addEventListener('click', saveSharedValue);
