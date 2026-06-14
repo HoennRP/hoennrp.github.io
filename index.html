@@ -66,7 +66,6 @@
     /* Controls */
     .ctrl-row { display: flex; align-items: center; gap: 14px; }
     .ctrl-row + .ctrl-row { margin-top: 16px; }
-    .count-row { justify-content: flex-end; }
     .grow { flex: 1; }
     input[type="text"], input[type="number"] {
         background: var(--inset);
@@ -80,6 +79,31 @@
     input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent); }
     input[type="text"] { width: 100%; }
     input[type="number"] { width: 74px; text-align: center; }
+
+    /* Type combobox (typable + clickable dropdown of every type) */
+    .combo { position: relative; }
+    .combo > input { width: 100%; padding-right: 34px; }
+    .combo-arrow {
+        position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+        background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.8rem; padding: 6px; line-height: 1;
+    }
+    .combo-list {
+        position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 30;
+        margin: 0; padding: 5px; list-style: none; max-height: 260px; overflow-y: auto;
+        background: var(--inset); border: 1px solid var(--border-2); border-radius: 9px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4); display: none;
+    }
+    .combo-list.open { display: block; }
+    .combo-list li {
+        display: flex; align-items: center; gap: 9px;
+        padding: 8px 10px; border-radius: 6px; cursor: pointer;
+        font-size: 0.95rem; color: var(--text); text-transform: capitalize;
+    }
+    .combo-list li:hover { background: rgba(142, 201, 232, 0.14); }
+    .combo-list li.hidden { display: none; }
+    .combo-list .dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+    .combo-list .empty { color: var(--muted); cursor: default; }
+    .combo-list .empty:hover { background: none; }
 
     /* Toggle */
     .toggle-row { justify-content: space-between; }
@@ -164,15 +188,14 @@
     </div>
 
     <div class="panel">
-        <div class="ctrl-row count-row">
-            <span class="label">How many spawns?</span>
-            <input type="number" id="count" min="1" max="12" value="1" />
-        </div>
         <div class="ctrl-row">
             <span class="label" style="flex:0 0 auto;">Type</span>
-            <input type="text" id="typeInput" class="grow" list="typeList"
-                   placeholder="Type or choose a type… (e.g. water)" autocomplete="off" />
-            <datalist id="typeList"></datalist>
+            <div class="combo grow" id="typeCombo">
+                <input type="text" id="typeInput" autocomplete="off"
+                       placeholder="Type or choose a type… (e.g. water)" />
+                <button type="button" class="combo-arrow" id="typeArrow" aria-label="Show all types">▾</button>
+                <ul class="combo-list" id="typeList"></ul>
+            </div>
         </div>
         <div class="ctrl-row">
             <span class="label" style="flex:0 0 auto;">Tags</span>
@@ -180,8 +203,18 @@
         </div>
         <div class="ctrl-row toggle-row">
             <div class="toggle-meta">
+                <strong>How many spawns?</strong>
+                <span>Off = 1 spawn · on = 2 spawns.</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="spawnsToggle" />
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="ctrl-row toggle-row">
+            <div class="toggle-meta">
                 <strong>Monthly Bonus</strong>
-                <span>Adds a 5th move (italic), drawn from the Egg Move pool when available.</span>
+                <span>When available: adds a 5th move (italic) from the Egg Move pool and uses the Hidden Ability.</span>
             </div>
             <label class="switch">
                 <input type="checkbox" id="monthlyBonus" />
@@ -305,9 +338,16 @@ async function generateSpawn(typeResponse, monthlyBonus) {
     const pokemonResponse = await pokeFetch('pokemon/' + orgName);
 
     const name = pokemonResponse.name.toUpperCase();
-    const sprite = pokemonResponse.sprites.front_default;
+    // Shiny roll per spawn: 5% normally, 10% with Monthly Bonus. Shiny uses the shiny sprite.
+    const isShiny = getRandomInt(100) < (monthlyBonus ? 10 : 5);
+    const sprite = (isShiny && pokemonResponse.sprites.front_shiny)
+        ? pokemonResponse.sprites.front_shiny
+        : pokemonResponse.sprites.front_default;
     const gender = resolveGender(speciesData);
-    const ability = fmt(pokemonResponse.abilities[getRandomInt(pokemonResponse.abilities.length)].ability);
+    // MONTHLY BONUS: prefer the Hidden Ability when one exists, otherwise a random ability.
+    let abilityEntry = monthlyBonus ? pokemonResponse.abilities.find(a => a.is_hidden) : null;
+    if (!abilityEntry) abilityEntry = pokemonResponse.abilities[getRandomInt(pokemonResponse.abilities.length)];
+    const ability = fmt(abilityEntry.ability);
 
     const levelUpPool = movePool(pokemonResponse.moves, 'level-up');
     const chosen = pickRandomMoves(levelUpPool, 4);
@@ -326,7 +366,7 @@ async function generateSpawn(typeResponse, monthlyBonus) {
         if (fifth) chosen.push(fifth);
     }
 
-    return { name, sprite, gender, ability, moveStrings: chosen.map(fmt) };
+    return { name, sprite, gender, ability, isShiny, moveStrings: chosen.map(fmt) };
 }
 
 // ----- BBCode template -----
@@ -336,8 +376,8 @@ function buildTemplate(data, tags) {
     return `[div align="center"]
 [div][attr="class","wildtemp"]
 [div][attr="class","wildbgsaf"][/div]
-[div][attr="class","wildtitle"]A WILD ${data.name} APPEARED![/div]
-[div][attr="class","wildshiny"][img src="https://i.imgur.com/Ht4F0n8.png" style="max-width:100%;opacity:0;"][/div]
+[div][attr="class","wildtitle"]A ${data.isShiny ? 'SHINY' : 'WILD'} ${data.name} APPEARED![/div]
+[div][attr="class","wildshiny"][img src="https://i.imgur.com/Ht4F0n8.png" style="max-width:100%;opacity:${data.isShiny ? 1 : 0};"][/div]
 [div][attr="class","wildpkmnbox"]
 [div][attr="class","wildpkmn"]
 [img style="max-width:100%;" src="${data.sprite}" alt=" "]
@@ -396,7 +436,8 @@ function bbcodeToHtml(bb) {
 function render() {
     let tags = state.tags.trim();
     if (!tags) tags = '@tag';
-    else if (!tags.startsWith('@')) tags = '@' + tags;   // user need not type the @
+    // Prefix each space-separated name with @ (skip ones the user already prefixed).
+    else tags = tags.split(/\s+/).map(t => t.startsWith('@') ? t : '@' + t).join(' ');
     const previewBody = document.getElementById('previewBody');
 
     if (!state.spawns.length) {
@@ -423,19 +464,25 @@ function setBusy(busy, msg) {
     }
 }
 
+let generationId = 0;   // guards against overlapping generations — only the latest run is applied
+
 async function generate() {
     if (!state.type) return;
+    const myId = ++generationId;
     setBusy(true, '');
     try {
         const typeResponse = await pokeFetch('type/' + state.type);
         const spawns = [];
         for (let i = 0; i < state.count; i++) {
             spawns.push(await generateSpawn(typeResponse, state.monthlyBonus));
+            if (myId !== generationId) return;   // a newer generation started — abandon this one
         }
+        if (myId !== generationId) return;
         state.spawns = spawns;
         render();
         setBusy(false, '');
     } catch (err) {
+        if (myId !== generationId) return;       // a newer generation owns the UI now
         state.spawns = [];
         render();
         setBusy(false, 'Could not generate. Check your connection and try again.');
@@ -444,35 +491,73 @@ async function generate() {
 
 // ----- Wiring -----
 const TYPE_NAMES = new Set(TYPES.map(t => t.name));
+const typeInput = document.getElementById('typeInput');
+const typeListEl = document.getElementById('typeList');
+const typeCombo = document.getElementById('typeCombo');
 
+// Build the dropdown: one clickable row per type (with its color dot) + a "no match" placeholder.
 function buildTypeOptions() {
-    const list = document.getElementById('typeList');
     TYPES.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t.name;
-        list.appendChild(opt);
+        const li = document.createElement('li');
+        li.dataset.value = t.name;
+        li.innerHTML = '<span class="dot" style="background:' + t.color + '"></span>' + t.name;
+        li.addEventListener('mousedown', e => { e.preventDefault(); chooseType(t.name); });
+        typeListEl.appendChild(li);
     });
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = 'No matching type';
+    empty.style.display = 'none';
+    typeListEl.appendChild(empty);
 }
 
-document.getElementById('typeInput').addEventListener('change', e => {
-    const val = e.target.value.trim().toLowerCase();
-    e.target.value = val;
-    if (TYPE_NAMES.has(val)) {
-        document.getElementById('status').textContent = '';
-        state.type = val;
-        generate();
-    } else if (val) {
-        state.type = null;
-        document.getElementById('status').textContent = 'Unknown type — choose one from the list.';
+function filterTypeList() {
+    const q = typeInput.value.trim().toLowerCase();
+    let anyVisible = false;
+    typeListEl.querySelectorAll('li[data-value]').forEach(li => {
+        const hide = q && !li.dataset.value.includes(q);
+        li.classList.toggle('hidden', hide);
+        if (!hide) anyVisible = true;
+    });
+    typeListEl.querySelector('.empty').style.display = anyVisible ? 'none' : 'block';
+}
+
+function openTypeList() { filterTypeList(); typeListEl.classList.add('open'); }
+function closeTypeList() { typeListEl.classList.remove('open'); }
+
+function chooseType(name) {
+    typeInput.value = name;
+    closeTypeList();
+    document.getElementById('status').textContent = '';
+    state.type = name;
+    generate();
+}
+
+typeInput.addEventListener('focus', openTypeList);
+typeInput.addEventListener('input', openTypeList);
+typeInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeTypeList();
+    else if (e.key === 'Enter') {
+        const val = typeInput.value.trim().toLowerCase();
+        if (TYPE_NAMES.has(val) && val !== state.type) { e.preventDefault(); chooseType(val); }
     }
 });
+typeInput.addEventListener('change', () => {
+    const val = typeInput.value.trim().toLowerCase();
+    typeInput.value = val;
+    if (val === state.type) return;                 // already selected — no re-generate
+    if (TYPE_NAMES.has(val)) chooseType(val);
+    else if (val) { state.type = null; document.getElementById('status').textContent = 'Unknown type — choose one from the list.'; }
+});
+document.getElementById('typeArrow').addEventListener('mousedown', e => {
+    e.preventDefault();
+    if (typeListEl.classList.contains('open')) closeTypeList();
+    else { typeInput.focus(); openTypeList(); }
+});
+document.addEventListener('mousedown', e => { if (!typeCombo.contains(e.target)) closeTypeList(); });
 
-document.getElementById('count').addEventListener('change', e => {
-    let v = parseInt(e.target.value, 10);
-    if (isNaN(v) || v < 1) v = 1;
-    if (v > 12) v = 12;
-    e.target.value = v;
-    state.count = v;
+document.getElementById('spawnsToggle').addEventListener('change', e => {
+    state.count = e.target.checked ? 2 : 1;   // off = 1 spawn, on = 2 spawns
     if (state.type) generate();
 });
 
