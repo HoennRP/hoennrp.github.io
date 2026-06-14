@@ -175,6 +175,15 @@
 
     .status { text-align: center; color: #ff8a8a; min-height: 18px; margin: 8px 0 0; font-size: 0.85rem; }
 
+    /* Shared value field */
+    .shared-save {
+        flex: 0 0 auto; background: var(--accent); color: #14202a; border: none;
+        border-radius: 9px; padding: 10px 16px; font-weight: 700; cursor: pointer; font-size: 0.9rem;
+    }
+    .shared-save:hover:not(:disabled) { background: #a7d4ef; }
+    .shared-save:disabled { opacity: 0.5; cursor: not-allowed; }
+    .shared-status { color: var(--muted); font-size: 0.8rem; margin: 8px 0 0; min-height: 16px; text-align: right; }
+
     @media (max-width: 560px) {
         .header h1 { font-size: 2.1rem; }
     }
@@ -185,6 +194,19 @@
 
     <div class="panel header">
         <h1>wild encounter</h1>
+    </div>
+
+    <div class="panel">
+        <div class="ctrl-row">
+            <span class="label" style="flex:0 0 auto;">Monthly Bonus Type</span>
+            <div class="combo grow" id="sharedCombo">
+                <input type="text" id="sharedInput" autocomplete="off" maxlength="200" placeholder="Type or choose a type…" />
+                <button type="button" class="combo-arrow" id="sharedArrow" aria-label="Show all types">▾</button>
+                <ul class="combo-list" id="sharedList"></ul>
+            </div>
+            <button type="button" class="shared-save" id="sharedSave">Save</button>
+        </div>
+        <p class="shared-status" id="sharedStatus"></p>
     </div>
 
     <div class="panel">
@@ -491,70 +513,97 @@ async function generate() {
 
 // ----- Wiring -----
 const TYPE_NAMES = new Set(TYPES.map(t => t.name));
-const typeInput = document.getElementById('typeInput');
-const typeListEl = document.getElementById('typeList');
-const typeCombo = document.getElementById('typeCombo');
 
-// Build the dropdown: one clickable row per type (with its color dot) + a "no match" placeholder.
-function buildTypeOptions() {
+// Reusable type combobox: typable + clickable dropdown of every type.
+// opts.onChoose(name) fires on a valid pick; opts.onInvalid(val) when typed text isn't a real type.
+function setupTypeCombo(combo, input, list, arrow, opts) {
     TYPES.forEach(t => {
         const li = document.createElement('li');
         li.dataset.value = t.name;
         li.innerHTML = '<span class="dot" style="background:' + t.color + '"></span>' + t.name;
-        li.addEventListener('mousedown', e => { e.preventDefault(); chooseType(t.name); });
-        typeListEl.appendChild(li);
+        li.addEventListener('mousedown', e => { e.preventDefault(); choose(t.name); });
+        list.appendChild(li);
     });
     const empty = document.createElement('li');
     empty.className = 'empty';
     empty.textContent = 'No matching type';
     empty.style.display = 'none';
-    typeListEl.appendChild(empty);
-}
+    list.appendChild(empty);
 
-function filterTypeList() {
-    const q = typeInput.value.trim().toLowerCase();
-    let anyVisible = false;
-    typeListEl.querySelectorAll('li[data-value]').forEach(li => {
-        const hide = q && !li.dataset.value.includes(q);
-        li.classList.toggle('hidden', hide);
-        if (!hide) anyVisible = true;
-    });
-    typeListEl.querySelector('.empty').style.display = anyVisible ? 'none' : 'block';
-}
-
-function openTypeList() { filterTypeList(); typeListEl.classList.add('open'); }
-function closeTypeList() { typeListEl.classList.remove('open'); }
-
-function chooseType(name) {
-    typeInput.value = name;
-    closeTypeList();
-    document.getElementById('status').textContent = '';
-    state.type = name;
-    generate();
-}
-
-typeInput.addEventListener('focus', openTypeList);
-typeInput.addEventListener('input', openTypeList);
-typeInput.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeTypeList();
-    else if (e.key === 'Enter') {
-        const val = typeInput.value.trim().toLowerCase();
-        if (TYPE_NAMES.has(val) && val !== state.type) { e.preventDefault(); chooseType(val); }
+    function filter() {
+        const q = input.value.trim().toLowerCase();
+        let anyVisible = false;
+        list.querySelectorAll('li[data-value]').forEach(li => {
+            const hide = q && !li.dataset.value.includes(q);
+            li.classList.toggle('hidden', hide);
+            if (!hide) anyVisible = true;
+        });
+        empty.style.display = anyVisible ? 'none' : 'block';
     }
-});
-typeInput.addEventListener('change', () => {
-    const val = typeInput.value.trim().toLowerCase();
-    typeInput.value = val;
-    if (val === state.type) return;                 // already selected — no re-generate
-    if (TYPE_NAMES.has(val)) chooseType(val);
-    else if (val) { state.type = null; document.getElementById('status').textContent = 'Unknown type — choose one from the list.'; }
-});
-document.getElementById('typeArrow').addEventListener('mousedown', e => {
-    e.preventDefault();
-    if (typeListEl.classList.contains('open')) closeTypeList();
-    else { typeInput.focus(); openTypeList(); }
-});
-document.addEventListener('mousedown', e => { if (!typeCombo.contains(e.target)) closeTypeList(); });
+    function open() { filter(); list.classList.add('open'); }
+    function close() { list.classList.remove('open'); }
+    function choose(name) { input.value = name; close(); opts.onChoose(name); }
+
+    input.addEventListener('focus', open);
+    input.addEventListener('input', open);
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') close();
+        else if (e.key === 'Enter') {
+            const val = input.value.trim().toLowerCase();
+            if (TYPE_NAMES.has(val)) { e.preventDefault(); choose(val); }
+        }
+    });
+    input.addEventListener('change', () => {
+        const val = input.value.trim().toLowerCase();
+        input.value = val;
+        if (TYPE_NAMES.has(val)) choose(val);
+        else if (val && opts.onInvalid) opts.onInvalid(val);
+    });
+    arrow.addEventListener('mousedown', e => {
+        e.preventDefault();
+        if (list.classList.contains('open')) close();
+        else { input.focus(); open(); }
+    });
+    document.addEventListener('mousedown', e => { if (!combo.contains(e.target)) close(); });
+}
+
+// Auto-enable Monthly Bonus when the chosen generation Type matches the shared Monthly Bonus Type (disable otherwise).
+function syncMonthlyBonusToggle() {
+    const mbType = (document.getElementById('sharedInput').value || '').trim().toLowerCase();
+    const match = !!(state.type && mbType && state.type === mbType);
+    document.getElementById('monthlyBonus').checked = match;
+    state.monthlyBonus = match;
+}
+
+// Generation Type
+setupTypeCombo(
+    document.getElementById('typeCombo'),
+    document.getElementById('typeInput'),
+    document.getElementById('typeList'),
+    document.getElementById('typeArrow'),
+    {
+        onChoose: name => {
+            if (name === state.type) return;          // already selected — no re-generate
+            document.getElementById('status').textContent = '';
+            state.type = name;
+            syncMonthlyBonusToggle();                 // bonus follows the shared Monthly Bonus Type
+            generate();
+        },
+        onInvalid: () => {
+            state.type = null;
+            document.getElementById('status').textContent = 'Unknown type — choose one from the list.';
+        }
+    }
+);
+
+// Monthly Bonus Type (the shared value)
+setupTypeCombo(
+    document.getElementById('sharedCombo'),
+    document.getElementById('sharedInput'),
+    document.getElementById('sharedList'),
+    document.getElementById('sharedArrow'),
+    { onChoose: () => syncMonthlyBonusToggle() }
+);
 
 document.getElementById('spawnsToggle').addEventListener('change', e => {
     state.count = e.target.checked ? 2 : 1;   // off = 1 spawn, on = 2 spawns
@@ -584,7 +633,57 @@ document.getElementById('copyBtn').addEventListener('click', () => {
 // Re-roll: generate a fresh spawn with the same settings the user already entered.
 document.getElementById('rerollBtn').addEventListener('click', () => generate());
 
-buildTypeOptions();
+// ----- Shared value (public key/value store via Pantry, getpantry.cloud) -----
+// One value, shared by everyone, persisted between sessions. Any visitor can read AND overwrite it.
+const PANTRY_ID = 'b3b3f7fa-f1bf-4f9e-921e-f546493ba0ff';   // public by design (any visitor can read/overwrite)
+const SHARED_BASKET = 'wildgen-shared';
+const sharedInput = document.getElementById('sharedInput');
+const sharedSave = document.getElementById('sharedSave');
+const sharedStatus = document.getElementById('sharedStatus');
+
+function pantryUrl() {
+    return 'https://getpantry.cloud/apiv1/pantry/' + PANTRY_ID + '/basket/' + SHARED_BASKET;
+}
+
+async function loadSharedValue() {
+    if (!PANTRY_ID) { sharedStatus.textContent = 'Shared storage not set up yet.'; return; }
+    try {
+        const res = await fetch(pantryUrl());
+        if (res.ok) {
+            const data = await res.json();
+            sharedInput.value = (data && typeof data.value === 'string') ? data.value : '';
+            sharedStatus.textContent = 'Loaded the shared value.';
+        } else {
+            sharedStatus.textContent = '';   // basket not created yet — nothing saved so far
+        }
+    } catch (e) {
+        sharedStatus.textContent = 'Could not load the shared value.';
+    }
+    syncMonthlyBonusToggle();   // reflect the loaded Monthly Bonus Type against the current Type
+}
+
+async function saveSharedValue() {
+    if (!PANTRY_ID) { sharedStatus.textContent = 'Shared storage not set up yet.'; return; }
+    const value = sharedInput.value.trim().slice(0, 200);   // cap length to limit abuse
+    sharedSave.disabled = true;
+    sharedStatus.textContent = 'Saving…';
+    try {
+        const res = await fetch(pantryUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value })
+        });
+        sharedStatus.textContent = res.ok ? 'Saved for everyone.' : 'Save failed — try again.';
+    } catch (e) {
+        sharedStatus.textContent = 'Save failed — try again.';
+    } finally {
+        sharedSave.disabled = false;
+    }
+    syncMonthlyBonusToggle();   // a new Monthly Bonus Type may now match the current Type
+}
+
+sharedSave.addEventListener('click', saveSharedValue);
+loadSharedValue();
 </script>
 </body>
 </html>
