@@ -120,6 +120,8 @@
     .panel-title { text-align: center; color: var(--muted); letter-spacing: 3px; font-size: 0.78rem; font-weight: 700; margin-bottom: 16px; }
     .window-body { padding: 26px 22px; min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
     .placeholder { color: var(--muted); font-size: 0.9rem; }
+    .capture-note { max-width: 500px; margin: 0 auto; color: var(--text); font-size: 0.9rem; }
+    .capture-note blockquote { margin: 0; padding: 10px 14px; background: var(--inset); border-left: 3px solid var(--accent); border-radius: 8px; }
 
     /* Rendered forum post (BBCode -> HTML) — your HOENN CSS block applied verbatim to the generated BBCode.
        ProBoards @variables resolved: bg #2b2b2b, border #232323, font #aaa. The only deviation from the block
@@ -252,6 +254,16 @@
                 <span class="slider"></span>
             </label>
         </div>
+        <div class="ctrl-row toggle-row">
+            <div class="toggle-meta">
+                <strong>Previous Capture attempt</strong>
+                <span>Adds a "capture attempt(s) successful" line to the end of the BBCode.</span>
+            </div>
+            <label class="switch">
+                <input type="checkbox" id="captureToggle" />
+                <span class="slider"></span>
+            </label>
+        </div>
         <p class="status" id="status"></p>
         <button class="reroll" id="rerollBtn" disabled>↻ Generate New Spawn</button>
     </div>
@@ -292,7 +304,7 @@ const TYPES = [
     { name: 'fairy',    color: '#d685ad', icon: '\u{1F380}' },
 ];
 
-const state = { type: null, type2: null, count: 1, tags: '', monthlyBonus: false, spawns: [], bbcode: '' };
+const state = { type: null, type2: null, count: 1, tags: '', monthlyBonus: false, captureSuccess: false, spawns: [], bbcode: '' };
 
 // ----- PokeAPI access (browser-direct, with localStorage caching) -----
 async function pokeFetch(endpoint) {
@@ -458,6 +470,9 @@ function bbcodeToHtml(bb) {
         .replace(/\[font color="([^"]*)"\]/g, '<span style="color:#$1">')
         .replace(/\[\/font\]/g, '</span>')
         .replace(/\[i\]/g, '<i>').replace(/\[\/i\]/g, '</i>')
+        .replace(/\[b\]/g, '<b>').replace(/\[\/b\]/g, '</b>')
+        .replace(/\[blockquote\]/g, '<blockquote>').replace(/\[\/blockquote\]/g, '</blockquote>')
+        .replace(/\[center\]/g, '<div style="text-align:center">').replace(/\[\/center\]/g, '</div>')
         .replace(/\[table\]/g, '<table>').replace(/\[\/table\]/g, '</table>')
         .replace(/\[tbody\]/g, '<tbody>').replace(/\[\/tbody\]/g, '</tbody>')
         .replace(/\[tr\]/g, '<tr>').replace(/\[\/tr\]/g, '</tr>')
@@ -482,12 +497,19 @@ function render() {
     }
 
     const cards = state.spawns.map(s => buildTemplate(s, tags));
-    previewBody.innerHTML = cards
-        .map(bb => '<div class="forum-render">' + bbcodeToHtml(bb) + '</div>')
-        .join('');
+    let previewHtml = cards.map(bb => '<div class="forum-render">' + bbcodeToHtml(bb) + '</div>').join('');
+    let bbcode = '[nospaces]\n' + cards.join('\n\n');   // one [nospaces] per generation, not per card
 
-    state.bbcode = '[nospaces]\n' + cards.join('\n\n');   // one [nospaces] per generation, not per card
-    document.getElementById('payload').textContent = state.bbcode;
+    // "Previous Capture attempt": one success line at the very end, regardless of spawn count.
+    if (state.captureSuccess) {
+        const captureLine = '[blockquote][center][b]YOUR CAPTURE ATTEMPT(S) ARE SUCCESSFUL![/b][/center][/blockquote]';
+        bbcode += '\n\n' + captureLine;
+        previewHtml += '<div class="capture-note">' + bbcodeToHtml(captureLine) + '</div>';
+    }
+
+    previewBody.innerHTML = previewHtml;
+    state.bbcode = bbcode;
+    document.getElementById('payload').textContent = bbcode;
 }
 
 function setBusy(busy, msg) {
@@ -652,6 +674,11 @@ document.getElementById('spawnsToggle').addEventListener('change', e => {
 document.getElementById('monthlyBonus').addEventListener('change', e => {
     state.monthlyBonus = e.target.checked;
     if (state.type) generate();
+});
+
+document.getElementById('captureToggle').addEventListener('change', e => {
+    state.captureSuccess = e.target.checked;
+    if (state.spawns.length) render();   // just appends/removes the line — no refetch
 });
 
 document.getElementById('tags').addEventListener('input', e => {
